@@ -23,17 +23,32 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker auth
-        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
+        env:
+          REGION: ${{ secrets.GCP_REGION }}
+        run: |
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
       - name: Build and push image
         env:
           PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           REGION: ${{ secrets.GCP_REGION }}
+          # Puedes mantenerlo por secreto, pero debe ser EXACTAMENTE "flight-delay-repo" en minúsculas
           AR_REPO: ${{ secrets.GCP_AR_REPO }}
           IMAGE: flight-delay-api
         run: |
-          docker build -t $REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO/$IMAGE:latest .
-          docker push $REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO/$IMAGE:latest
+          echo "PROJECT_ID=$PROJECT_ID"
+          echo "REGION=$REGION"
+          echo "AR_REPO=$AR_REPO"
+          echo "IMAGE=$IMAGE"
+
+          IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${IMAGE}:latest"
+          IMAGE_URI_LC="$(echo "$IMAGE_URI" | tr '[:upper:]' '[:lower:]')"
+
+          echo "IMAGE_URI (original) = $IMAGE_URI"
+          echo "IMAGE_URI (lowercase) = $IMAGE_URI_LC"
+
+          docker build -t "$IMAGE_URI_LC" .
+          docker push "$IMAGE_URI_LC"
 
       - name: Deploy to Cloud Run
         env:
@@ -43,8 +58,11 @@ jobs:
           AR_REPO: ${{ secrets.GCP_AR_REPO }}
           IMAGE: flight-delay-api
         run: |
-          gcloud run deploy $SERVICE \
-            --project $PROJECT_ID \
-            --region $REGION \
-            --image $REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO/$IMAGE:latest \
+          IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${IMAGE}:latest"
+          IMAGE_URI_LC="$(echo "$IMAGE_URI" | tr '[:upper:]' '[:lower:]')"
+
+          gcloud run deploy "$SERVICE" \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            --image "$IMAGE_URI_LC" \
             --allow-unauthenticated
