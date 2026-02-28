@@ -1,0 +1,50 @@
+name: Continuous Delivery
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker auth
+        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push image
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          REGION: ${{ secrets.GCP_REGION }}
+          AR_REPO: ${{ secrets.GCP_AR_REPO }}
+          IMAGE: flight-delay-api
+        run: |
+          docker build -t $REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO/$IMAGE:latest .
+          docker push $REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO/$IMAGE:latest
+
+      - name: Deploy to Cloud Run
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          REGION: ${{ secrets.GCP_REGION }}
+          SERVICE: ${{ secrets.GCP_SERVICE }}
+          AR_REPO: ${{ secrets.GCP_AR_REPO }}
+          IMAGE: flight-delay-api
+        run: |
+          gcloud run deploy $SERVICE \
+            --project $PROJECT_ID \
+            --region $REGION \
+            --image $REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO/$IMAGE:latest \
+            --allow-unauthenticated
