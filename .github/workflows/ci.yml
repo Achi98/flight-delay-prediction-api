@@ -26,6 +26,11 @@ jobs:
           pip install -r requirements-test.txt
           pip install -r requirements.txt
 
+      - name: Fix test data path (../data/data.csv)
+        run: |
+          mkdir -p ../data
+          cp -f data/data.csv ../data/data.csv
+
       - name: Run model tests
         run: make model-test
 
